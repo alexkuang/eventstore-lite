@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3'
+          elixir-version: '1.18.4'
+      - run: mix deps.get --check-locked
+      - run: mix format --check-formatted
+      - run: mix credo
+      - name: Full test suite in every configuration
+        run: |
+          for env in test jsonb text_ids migration; do
+            MIX_ENV="$env" mix test --include slow --include migration || exit "$?"
+          done
+      - name: Commanded integration smoke test
+        run: MIX_ENV=test mix run test/manual/commanded_smoke.exs
+      - run: mix docs --warnings-as-errors
+      - name: Validate package and documentation without publishing
+        run: mix hex.publish --dry-run --yes

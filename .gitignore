@@ -1,0 +1,8 @@
+/_build/
+/deps/
+/cover/
+*.sqlite3*
+*.db*
+/erl_crash.dump
+/doc/
+/eventstore_lite-*.tar

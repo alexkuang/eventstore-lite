@@ -1,0 +1,52 @@
+name: Publish to Hex
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hex-publish
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: hex-publish
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          persist-credentials: false
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.3'
+          elixir-version: '1.18.4'
+      - name: Check release tag matches package version
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          mix run --no-start --no-deps-check --no-compile -e '
+            expected = "v" <> Mix.Project.config()[:version]
+            actual = System.fetch_env!("RELEASE_TAG")
+            if actual != expected, do: raise("Expected release tag #{expected}, got #{actual}")
+          '
+      - run: mix deps.get --check-locked
+      - run: mix docs --warnings-as-errors
+      - name: Publish package and documentation
+        env:
+          HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
+        run: |
+          # Without a bootstrap key, Hex uses GitHub OIDC (Workload Identity).
+          if [ -z "$HEX_API_KEY" ]; then unset HEX_API_KEY; fi
+          mix hex.publish --yes

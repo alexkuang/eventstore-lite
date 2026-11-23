@@ -1,0 +1,2 @@
+DELETE FROM snapshots
+WHERE source_uuid = ?1;
